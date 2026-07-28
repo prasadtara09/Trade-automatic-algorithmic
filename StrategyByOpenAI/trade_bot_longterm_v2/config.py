@@ -21,10 +21,18 @@ FYERS_SECRET_FIELDS = (
 )
 FYERS_SECRET_ID = (os.getenv("FYERS_SECRET_ID") or "").strip()
 AWS_REGION = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip() or None
+# Optional shared state for separate scanner and stream containers. The EC2
+# instance profile supplies AWS credentials; no access key belongs in .env.
+S3_BUCKET = (os.getenv("S3_BUCKET") or "").strip()
+S3_TARGETS_KEY = (os.getenv("S3_TARGETS_KEY") or "state/swing_rotation_targets.csv").strip().lstrip("/")
 
 
 class FyersSecretError(RuntimeError):
     """Raised when the configured FYERS credential source cannot be used."""
+
+
+class S3TargetsError(RuntimeError):
+    """Raised when the configured shared target basket cannot be accessed."""
 
 
 def _secrets_manager_client():
@@ -35,6 +43,58 @@ def _secrets_manager_client():
             "FYERS_SECRET_ID is set, but boto3 is unavailable. Run: pip install -r requirements.txt"
         ) from error
     return boto3.client("secretsmanager", region_name=AWS_REGION)
+
+
+def _s3_client():
+    try:
+        import boto3
+    except ImportError as error:
+        raise S3TargetsError("S3_BUCKET is set, but boto3 is unavailable. Run: pip install -r requirements.txt") from error
+    return boto3.client("s3", region_name=AWS_REGION)
+
+
+def s3_targets_enabled() -> bool:
+    """Return whether the scanner and stream should share targets through S3."""
+    return bool(S3_BUCKET)
+
+
+def upload_s3_targets(source: Path) -> None:
+    """Upload the completed weekly target CSV to the configured private bucket."""
+    if not s3_targets_enabled():
+        return
+    if not source.is_file():
+        raise S3TargetsError(f"Target basket does not exist: {source}")
+    try:
+        _s3_client().upload_file(
+            str(source),
+            S3_BUCKET,
+            S3_TARGETS_KEY,
+            ExtraArgs={"ContentType": "text/csv"},
+        )
+    except S3TargetsError:
+        raise
+    except Exception as error:
+        raise S3TargetsError(
+            f"Unable to upload targets to s3://{S3_BUCKET}/{S3_TARGETS_KEY} ({error.__class__.__name__})."
+        ) from error
+
+
+def download_s3_targets(destination: Path) -> None:
+    """Atomically download the current weekly target CSV from the configured bucket."""
+    if not s3_targets_enabled():
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".download")
+    try:
+        _s3_client().download_file(S3_BUCKET, S3_TARGETS_KEY, str(temporary))
+        temporary.replace(destination)
+    except S3TargetsError:
+        raise
+    except Exception as error:
+        temporary.unlink(missing_ok=True)
+        raise S3TargetsError(
+            f"Unable to download targets from s3://{S3_BUCKET}/{S3_TARGETS_KEY} ({error.__class__.__name__})."
+        ) from error
 
 
 def _parse_fyers_secret(secret_string: str) -> dict[str, str]:

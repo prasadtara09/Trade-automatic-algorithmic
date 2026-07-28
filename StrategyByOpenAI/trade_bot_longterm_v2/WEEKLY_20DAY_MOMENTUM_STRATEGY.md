@@ -139,6 +139,22 @@ The Friday command writes:
 reports/swing_rotation_targets.csv
 ```
 
+### Stateless Docker deployment (optional)
+
+When the scan and stream run in separate containers, set these non-secret
+values in the EC2 `.env` file:
+
+```env
+S3_BUCKET=fyers-tradebot-state-tara-2026
+S3_TARGETS_KEY=state/swing_rotation_targets.csv
+```
+
+The Friday scanner uploads the completed basket to this private location. The
+stream downloads it at startup and fails rather than silently using an
+image-local or stale CSV if S3 cannot be reached. The EC2 instance profile
+must allow `s3:GetObject`, `s3:PutObject`, and `s3:ListBucket` for this
+location. No AWS access keys are stored in `.env`.
+
 Its important columns are:
 
 | Column | Meaning |
