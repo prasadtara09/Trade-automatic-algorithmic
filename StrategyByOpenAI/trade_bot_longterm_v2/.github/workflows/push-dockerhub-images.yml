@@ -74,3 +74,4 @@ jobs:
           file: Dockerfile.nifty-scan
           push: true
           tags: ${{ steps.image-tags.outputs.scanner_tags }}
+
