@@ -12,12 +12,25 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from config import MAX_OPEN_POSITIONS
+from config import MAX_OPEN_POSITIONS, S3_BUCKET, S3_TARGETS_KEY, s3_targets_enabled, upload_s3_targets
 from data.downloader import download
 from data.universe import NIFTY200
 from data.yahoo_history import YahooHistoryClient, YahooHistoryError
 from strategy.momentum_rotation import MODEL_NAME, select_rotation_targets
 from strategy.swing_features import daily_indicators
+
+
+TARGET_COLUMNS = [
+    "Rank",
+    "Symbol",
+    "AsOf",
+    "Close",
+    "RS20Pct",
+    "SMA50",
+    "SMA200",
+    "MaxAllocationPct",
+    "Model",
+]
 
 
 def main():
@@ -63,9 +76,13 @@ def main():
         raise SystemExit("No daily candles were available.")
 
     as_of, targets = select_rotation_targets(frames, max_positions=MAX_OPEN_POSITIONS)
-    report = pd.DataFrame(targets)
+    # Keep the header even if no symbol qualifies. An empty Friday basket is
+    # an intentional instruction to hold no new positions, never a reason to
+    # keep a stale basket in the stream container.
+    report = pd.DataFrame(targets, columns=TARGET_COLUMNS)
     Path("reports").mkdir(exist_ok=True)
-    report.to_csv("reports/swing_rotation_targets.csv", index=False)
+    target_path = Path("reports/swing_rotation_targets.csv")
+    report.to_csv(target_path, index=False)
 
     print(f"\nModel: {MODEL_NAME}")
     print(f"Completed session used: {as_of.date()}")
@@ -79,10 +96,23 @@ def main():
         print("This is not a Friday close, so no weekly rebalance order is due. Use --show-any-day only to inspect rankings.")
         return
     if report.empty:
-        print("No stocks currently meet the model's long-only trend and momentum filters.")
-        return
-    print(report.to_string(index=False))
-    print("Saved reports/swing_rotation_targets.csv")
+        print("No stocks currently meet the model's long-only trend and momentum filters; saved an empty basket.")
+    else:
+        print(report.to_string(index=False))
+        print("Saved reports/swing_rotation_targets.csv")
+
+    # Inspection and catch-up runs must never replace the production basket.
+    # Only the intended Friday-after-close job publishes selected holdings or
+    # an explicit empty basket for the stream container to consume.
+    publish_to_s3 = (
+        not args.show_any_day
+        and now.weekday() == 4
+        and now.time() >= time(15, 45)
+        and as_of.weekday() == 4
+    )
+    if publish_to_s3 and s3_targets_enabled():
+        upload_s3_targets(target_path)
+        print(f"Uploaded target basket to s3://{S3_BUCKET}/{S3_TARGETS_KEY}")
 
 
 if __name__ == "__main__":

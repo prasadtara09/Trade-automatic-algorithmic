@@ -13,7 +13,8 @@ plotly==5.24.1
 
 streamlit==1.41.1
 
-requests==2.32.3
+# FYERS API v3.1.7 pins this exact compatible version.
+requests==2.31.0
 
 apscheduler==3.10.4
 

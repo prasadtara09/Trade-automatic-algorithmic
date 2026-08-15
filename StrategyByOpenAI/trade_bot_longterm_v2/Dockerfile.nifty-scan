@@ -25,9 +25,7 @@ COPY backtest ./backtest
 COPY broker ./broker
 COPY core ./core
 COPY data ./data
-COPY execution ./execution
 COPY indicators ./indicators
-COPY scanner ./scanner
 COPY strategy ./strategy
 
 RUN mkdir -p cache database logs reports \
@@ -35,6 +33,7 @@ RUN mkdir -p cache database logs reports \
 
 USER tradebot
 
-# Run after Friday's market close. This creates reports/swing_rotation_targets.csv
-# and exits; it never submits a broker order.
+# Run after Friday's market close. When S3_BUCKET is supplied at runtime, this
+# writes reports/swing_rotation_targets.csv and uploads it to the private
+# bucket, then exits; it never submits a broker order.
 CMD ["python", "run_swing_rotation_targets.py", "--refresh-current"]

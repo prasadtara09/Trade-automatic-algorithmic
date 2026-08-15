@@ -25,9 +25,7 @@ COPY backtest ./backtest
 COPY broker ./broker
 COPY core ./core
 COPY data ./data
-COPY execution ./execution
 COPY indicators ./indicators
-COPY scanner ./scanner
 COPY strategy ./strategy
 
 RUN mkdir -p cache database logs reports \
@@ -35,7 +33,7 @@ RUN mkdir -p cache database logs reports \
 
 USER tradebot
 
-# Continuous, data-only paper monitoring. By default, this reads
-# reports/swing_rotation_targets.csv produced by the NIFTY scan container.
-# It cannot submit an FYERS order.
+# Continuous, data-only paper monitoring. When S3_BUCKET is supplied at
+# runtime, it downloads state/swing_rotation_targets.csv from the private
+# bucket before connecting. It cannot submit an FYERS order.
 CMD ["python", "run_fyers_stream.py"]

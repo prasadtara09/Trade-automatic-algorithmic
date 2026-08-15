@@ -17,7 +17,13 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from broker.websocket import FyersDataStream, MarketTick
-from config import FYERS_WS_LITE_MODE
+from config import (
+    FYERS_WS_LITE_MODE,
+    S3_BUCKET,
+    S3_TARGETS_KEY,
+    download_s3_targets,
+    s3_targets_enabled,
+)
 from data.universe import NIFTY200
 
 
@@ -59,6 +65,11 @@ def _resolve_symbols(args: argparse.Namespace) -> Iterable[str]:
         return _symbols_from_csv(args.symbols)
     if args.nifty200:
         return NIFTY200
+    if s3_targets_enabled():
+        # Do not fall back to a possibly stale image-local CSV: a configured
+        # S3 bucket is the source of truth shared by the scan and stream jobs.
+        download_s3_targets(args.targets)
+        print(f"Downloaded target basket from s3://{S3_BUCKET}/{S3_TARGETS_KEY}")
     return _target_symbols(args.targets)
 
 
