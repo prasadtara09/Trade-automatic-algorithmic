@@ -155,6 +155,30 @@ image-local or stale CSV if S3 cannot be reached. The EC2 instance profile
 must allow `s3:GetObject`, `s3:PutObject`, and `s3:ListBucket` for this
 location. No AWS access keys are stored in `.env`.
 
+### EC2 weekday and Friday schedule
+
+The repository-root installer creates one simple EC2 cron configuration:
+
+- Monday-Friday 09:13 IST: starts the FYERS stream container.
+- Monday-Friday 15:45 IST: stops the stream container.
+- Friday 15:50 IST: runs the one-time NIFTY 200 scanner and uploads the basket.
+
+```bash
+sudo bash ops/install_tradebot_cron.sh \
+  tara0674/fyers-tradebot-stream:build-30364363226 \
+  tara0674/fyers-tradebot-nifty-scan:build-30364363226
+```
+
+Run the command from the Git repository root after creating
+`/opt/tradebot/.env` on EC2. Pass the stream image first and scanner image
+second, using the same immutable GitHub Actions build ID for both. The EC2
+instance must remain running for cron to execute. Logs are written to
+`/opt/tradebot/logs/`.
+
+The installer also enables a boot-time service. If EC2 starts after 09:13 but
+before 15:45 IST on a weekday, the stream starts immediately; otherwise cron
+starts it at 09:13 on the next eligible weekday.
+
 Its important columns are:
 
 | Column | Meaning |

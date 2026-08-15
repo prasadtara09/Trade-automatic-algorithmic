@@ -25,9 +25,7 @@ COPY backtest ./backtest
 COPY broker ./broker
 COPY core ./core
 COPY data ./data
-COPY execution ./execution
 COPY indicators ./indicators
-COPY scanner ./scanner
 COPY strategy ./strategy
 
 RUN mkdir -p cache database logs reports \
